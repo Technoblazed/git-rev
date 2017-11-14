@@ -1,31 +1,55 @@
 var exec = require('child_process').exec
 
 function _command (cmd, cb) {
-  exec(cmd, { cwd: __dirname }, function (err, stdout, stderr) {
-    cb(stdout.split('\n').join(''))
+  exec(cmd, { cwd: __dirname, maxBuffer: 1024 * 1024 }, function (err, stdout, stderr) {
+    if (err !== null) {
+		console.log('[NODE-GIT-REV] exec error: ' + err);
+		cb(null);
+	}
+    cb(stdout.slice(0, -1));
   })
 }
 
 module.exports = {
-    short : function (cb) {
-      _command('git rev-parse --short HEAD', cb)
+  short: function (cb) {
+    _command('git rev-parse --short HEAD', cb)
+  },
+  long: function (cb) {
+    _command('git rev-parse HEAD', cb)
+  },
+  branch: function (cb) {
+    _command('git rev-parse --abbrev-ref HEAD', cb)
+  },
+  tag: function (cb) {
+    _command('git describe --always --tag --abbrev=0', cb)
+  },
+  log: function (cb, limit = 20) {
+    var cmd_string = 'git log --no-color --pretty=format:\"%H  |  %ct  |  %an  |  %s\" --abbrev-commit';
+
+    if (limit != null && !isNaN(limit)) {
+      cmd_string += ' -' + limit;
     }
-  , long : function (cb) {
-      _command('git rev-parse HEAD', cb)
-    }
-  , branch : function (cb) {
-      _command('git rev-parse --abbrev-ref HEAD', cb)
-    }
-  , tag : function (cb) {
-      _command('git describe --always --tag --abbrev=0', cb)
-    }
-  , log : function (cb) {
-      _command('git log -25 --no-color --pretty=format:"[ \"%H\", \"%s\", \"%ct\", \"%an\" ]," --abbrev-commit', function (str) {
-        str = str.substr(0, str.length-1)
-        cb(JSON.parse('[' + str + ']'))
-      })
-    }
-  , exactTag: function(cb){
+
+    _command(cmd_string, function (str) {
+      var logs = [];
+
+      if (str !== null) {
+        str.split('\n').forEach(function(line, line_idx) {
+          var parsed_line = line.split('  |  ');
+
+          logs.push([
+            parsed_line[0],
+            parsed_line[3],
+            parsed_line[1],
+            parsed_line[2]
+          ]);
+        });
+      };
+
+      cb(logs);
+    });
+  },
+  exactTag: function(cb){
     _command('git describe --exact-match --tags HEAD',function(str){
       if (str){
         cb(str)
